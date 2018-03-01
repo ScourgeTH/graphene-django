@@ -1,3 +1,4 @@
+from djongo import models as djongo_models
 from django.db import models
 from django.utils.encoding import force_text
 
@@ -191,6 +192,31 @@ def convert_field_to_djangomodel(field, registry=None):
             return
 
         return Field(_type, description=field.help_text, required=not field.null)
+
+    return Dynamic(dynamic_type)
+
+
+@convert_django_field.register(djongo_models.ArrayModelField)
+def convert_array_model_field_to_list(field, registry=None):
+    model = field.model_container
+
+    def dynamic_type():
+        _type = registry.get_type_for_model(model)
+        if not _type:
+            return
+
+        # If there is a connection, we should transform the field
+        # into a DjangoConnectionField
+        if _type._meta.connection:
+            # Use a DjangoFilterConnectionField if there are
+            # defined filter_fields in the DjangoObjectType Meta
+            if _type._meta.filter_fields:
+                from .filter.fields import DjangoFilterConnectionField
+                return DjangoFilterConnectionField(_type)
+
+            return DjangoConnectionField(_type)
+
+        return DjangoListField(_type)
 
     return Dynamic(dynamic_type)
 
